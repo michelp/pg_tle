@@ -63,6 +63,7 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/schemacmds.h"
+#include "commands/event_trigger.h"
 #include "executor/spi.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
@@ -4712,4 +4713,47 @@ static void check_requires_list(List *requires)
 				 errmsg("\"requires\" limited to %d entries for \"%s\" extensions",
 			 		TLE_REQUIRES_LIMIT, PG_TLE_EXTNAME)));
 	}
+}
+
+
+Datum
+create_extension_download_tle(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(create_extension_download_tle);
+Datum
+create_extension_download_tle(PG_FUNCTION_ARGS)
+{
+	int		spi_rc;
+    EventTriggerData *trigdata;
+	CreateExtensionStmt *stmt;
+	Oid		verargtypes[SPI_NARGS_1] = { TEXTOID };
+	Datum		verargs[SPI_NARGS_1];
+
+    if (!CALLED_AS_EVENT_TRIGGER(fcinfo))  /* internal error */
+        elog(ERROR, "not fired by event trigger manager");
+
+    trigdata = (EventTriggerData *) fcinfo->context;
+	stmt = (CreateExtensionStmt *) trigdata->parsetree;
+    elog(INFO, "Event Trigger for Extension: %s", stmt->extname);
+
+ 	if (SPI_connect() != SPI_OK_CONNECT) {
+ 		elog(ERROR, "Event Trigger SPI_connect failed");
+ 		PG_RETURN_NULL();
+ 	}
+
+	verargs[0] = CStringGetTextDatum(stmt->extname);
+	spi_rc = SPI_execute_with_args("SELECT pgtle.create_extension_check_download($1)",
+								   1, verargtypes, verargs, NULL, true, 1);
+	
+	if (spi_rc != SPI_OK_SELECT) {
+		ereport(ERROR,
+			(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			 errmsg("could not call event trigger download function"),
+			 errhint("Please define pgtle.")));
+	}
+	if (SPI_finish() != SPI_OK_FINISH) {
+		elog(ERROR, "SPI_finish failed");
+		PG_RETURN_BOOL(false);
+	}
+
+    PG_RETURN_NULL();
 }

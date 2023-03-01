@@ -217,6 +217,10 @@ RETURNS SETOF RECORD
 AS 'MODULE_PATHNAME', 'pg_tle_available_extension_versions'
 LANGUAGE C STABLE STRICT;
 
+CREATE OR REPLACE FUNCTION create_extension_download_tle()
+RETURNS event_trigger
+AS 'MODULE_PATHNAME', 'create_extension_download_tle' LANGUAGE C;
+
 -- Revoke privs from PUBLIC
 REVOKE EXECUTE ON FUNCTION pgtle.install_extension
 (
